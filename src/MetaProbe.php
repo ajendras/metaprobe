@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use MetaProbe\Gps;
 use MetaProbe\Metadata;
 use MetaProbe\Readers\ExifReader;
+use MetaProbe\Readers\ImagickReader;
 use MetaProbe\Readers\IptcReader;
 use MetaProbe\Readers\ReaderInterface;
 use MetaProbe\Readers\XmpReader;
@@ -21,7 +22,7 @@ use Throwable;
  * Main facade for the MetaProbe library.
  *
  * Provides a clean, unified API for metadata extraction, privacy scanning,
- * and sanitization of JPEG, PNG and TIFF images.
+ * and sanitization of JPEG, PNG, TIFF, WebP, AVIF and HEIC images.
  */
 final class MetaProbe
 {
@@ -39,6 +40,7 @@ final class MetaProbe
             new ExifReader(),
             new IptcReader(),
             new XmpReader(),
+            new ImagickReader(),
         ];
 
         $this->scanner = new Scanner();
@@ -98,7 +100,7 @@ final class MetaProbe
 
         if (!$this->isSupportedMime($mimeType)) {
             throw new InvalidArgumentException(sprintf(
-                'Unsupported MIME type "%s". Supported types: image/jpeg, image/png, image/tiff.',
+                'Unsupported MIME type "%s". Supported types: image/jpeg, image/png, image/tiff, image/webp, image/avif, image/heic.',
                 $mimeType
             ));
         }
@@ -121,6 +123,8 @@ final class MetaProbe
                     $iptcData = $data;
                 } elseif ($reader instanceof XmpReader) {
                     $xmpData = $data;
+                } elseif ($reader instanceof ImagickReader) {
+                    $exifData = array_merge($exifData, $data);
                 }
             } catch (Throwable $e) {
                 // Continue with partial data; errors are surfaced in SecurityReport
@@ -217,7 +221,7 @@ final class MetaProbe
      */
     private function isSupportedMime(string $mimeType): bool
     {
-        return in_array($mimeType, ['image/jpeg', 'image/png', 'image/tiff'], true);
+        return in_array($mimeType, ['image/jpeg', 'image/png', 'image/tiff', 'image/webp', 'image/avif', 'image/heic'], true);
     }
 
     /**

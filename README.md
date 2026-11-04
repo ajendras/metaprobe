@@ -23,7 +23,7 @@
 
 PHP web apps regularly process user images yet lack a unified, security-first tool to extract metadata without leaking GPS, device fingerprints or author info. Existing solutions are either outdated, limited to EXIF, or miss sanitization. MetaProbe targets developers building media managers, upload pipelines, forensic tools and AI-augmented image workflows.
 
-- **Unified extraction** — one call reads EXIF, IPTC and XMP from JPEG, PNG and TIFF
+- **Unified extraction** — one call reads EXIF, IPTC and XMP from JPEG, PNG, TIFF, WebP, AVIF and HEIC
 - **Built-in privacy scanning** — flags risky fields and returns a 0-100 safety score
 - **Smart sanitization** — strips PII while preserving quality, copyright and color profiles
 - **Rich, zero-config API** — immutable DTOs, GPS value object, pluggable readers and a beautiful CLI
@@ -36,7 +36,7 @@ PHP web apps regularly process user images yet lack a unified, security-first to
 
 <table>
 <tr>
-<td>📸 <b>Unified Extraction</b><br>Single API reads EXIF, IPTC and XMP from JPEG, PNG and TIFF in one call</td>
+<td>📸 <b>Unified Extraction</b><br>Single API reads EXIF, IPTC and XMP from JPEG, PNG, TIFF, WebP, AVIF and HEIC in one call</td>
 <td>🛰️ <b>GPS Decoder</b><br>Converts DMS coordinates to decimal with Google Maps link generator</td>
 <td>🔒 <b>Privacy Scanner</b><br>Flags risky fields and returns a numeric safety score via SecurityReport</td>
 </tr>
@@ -53,7 +53,7 @@ PHP web apps regularly process user images yet lack a unified, security-first to
 
 ## 📦 Installation
 
-**Requirements:** PHP 8.2+, `ext-exif`, `ext-xml`, `ext-gd` (Symfony Console is required only for the CLI).
+**Requirements:** PHP 8.2+, `ext-exif`, `ext-xml`, `ext-gd` (`ext-imagick` recommended for WebP, AVIF and HEIC metadata and sanitization). Symfony Console is required only for the CLI.
 
 ```bash
 composer require ajendras/metaprobe
@@ -175,7 +175,7 @@ $gps = $metadata->getGps()?->getDecimal();    // ['lat' => 51.5125, 'lng' => -0.
 ```mermaid
 flowchart TD
     Image[Image File] --> MetaProbe[MetaProbe Facade]
-    MetaProbe --> Readers[Readers<br/>ExifReader • IptcReader • XmpReader]
+    MetaProbe --> Readers[Readers<br/>ExifReader • IptcReader • XmpReader • ImagickReader]
     Readers -->|supports + read| Data[Normalized arrays]
     Data --> Metadata[Metadata DTO]
     Metadata --> Gps[Gps Value Object<br/>fromExif → decimal + Google Maps URL]
@@ -202,10 +202,11 @@ The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Me
 │   ├── Readers/
 │   │   ├── ExifReader.php        # exif_read_data() + normalization (Camera, Lens, Exposure, GPS)
 │   │   ├── IptcReader.php        # getimagesize() + iptcparse() mapping
-│   │   └── XmpReader.php         # APP1 XMP packet extraction via SimpleXML + XPath
+│   │   ├── XmpReader.php         # APP1 XMP packet extraction via SimpleXML + XPath
+│   │   └── ImagickReader.php     # Imagick getImageProperties() for WebP, AVIF, HEIC + normalization
 │   ├── Security/
 │   │   ├── Scanner.php           # getRisks(), calculateScore(), isSensitive()
-│   │   └── Sanitizer.php         # GD imagecopy or Imagick stripImage (JPEG/PNG/TIFF)
+│   │   └── Sanitizer.php         # GD imagecopy or Imagick stripImage (now with WebP/AVIF/HEIC)
 │   └── Console/
 │       └── ProbeCommand.php      # Symfony command with --format and --sanitize options
 ├── tests/
@@ -229,7 +230,7 @@ The suite covers GPS DMS-to-decimal conversion, extraction accuracy on fixture i
 ## 📍 Roadmap
 <!-- roadmap:start -->
 - [x] **v0.1.0** — first release: Unified Extraction, GPS Decoder, Privacy Scanner, Smart Sanitizer
-- [ ] Add WebP, AVIF and HEIC format support via native or Imagick readers
+- [x] Add WebP, AVIF and HEIC format support via native or Imagick readers
 - [ ] Batch directory command with progress bar and summary CSV export
 - [ ] PSR-15 middleware that auto-sanitizes uploaded images in frameworks
 - [ ] Steganography detector that flags unusual LSB patterns

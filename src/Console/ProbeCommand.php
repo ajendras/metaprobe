@@ -28,7 +28,7 @@ final class ProbeCommand extends Command
         $this
             ->setName('probe')
             ->setDescription(self::$defaultDescription)
-            ->setHelp('Probe an image file for EXIF, IPTC, XMP metadata, GPS coordinates and privacy risks.')
+            ->setHelp('Probe an image file for EXIF, IPTC, XMP metadata, GPS coordinates and privacy risks. Supports JPEG, PNG, TIFF, WebP, AVIF and HEIC.')
             ->addArgument('file', InputArgument::REQUIRED, 'Path to the image file to analyze')
             ->addOption(
                 'format',

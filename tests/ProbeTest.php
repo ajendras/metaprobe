@@ -59,6 +59,39 @@ final class ProbeTest extends TestCase
         $this->assertSame(151.2, $gps->getLongitude());
     }
 
+    public function testGpsFromExifHandlesImagickStyleStrings(): void
+    {
+        // Decimal from Imagick
+        $gps = Gps::fromExif([
+            'GPSLatitudeRef' => 'N',
+            'GPSLatitude' => '51.5125',
+            'GPSLongitudeRef' => 'W',
+            'GPSLongitude' => '-0.125',
+        ]);
+        $this->assertSame(51.5125, $gps->getLatitude());
+        $this->assertSame(-0.125, $gps->getLongitude());
+
+        // Comma-separated rationals
+        $gps = Gps::fromExif([
+            'GPSLatitudeRef' => 'N',
+            'GPSLatitude' => '51/1,30/1,0/1',
+            'GPSLongitudeRef' => 'E',
+            'GPSLongitude' => '0/1,7/1,30/1',
+        ]);
+        $this->assertSame(51.5, $gps->getLatitude());
+        $this->assertSame(0.125, $gps->getLongitude());
+
+        // Degree string
+        $gps = Gps::fromExif([
+            'GPSLatitudeRef' => 'N',
+            'GPSLatitude' => '51 deg 30\' 45.00"',
+            'GPSLongitudeRef' => 'W',
+            'GPSLongitude' => '0 deg 7\' 30.00"',
+        ]);
+        $this->assertEqualsWithDelta(51.5125, $gps->getLatitude(), 0.001);
+        $this->assertEqualsWithDelta(-0.125, $gps->getLongitude(), 0.001);
+    }
+
     public function testGpsThrowsOnMissingCoordinates(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -228,6 +261,33 @@ final class ProbeTest extends TestCase
         unlink($outputPath);
     }
 
+    public function testSanitizerSupportsWebp(): void
+    {
+        if (!function_exists('imagewebp')) {
+            $this->markTestSkipped('GD WebP support not available in this environment');
+        }
+
+        $inputPath = tempnam(sys_get_temp_dir(), 'metaprobe_webp_in_') . '.webp';
+        $outputPath = tempnam(sys_get_temp_dir(), 'metaprobe_webp_out_') . '.webp';
+
+        $image = imagecreatetruecolor(120, 120);
+        $color = imagecolorallocate($image, 0, 128, 255);
+        imagefill($image, 0, 0, $color);
+        imagestring($image, 5, 10, 50, 'WebP Test', imagecolorallocate($image, 255, 255, 255));
+        imagewebp($image, $inputPath, 90);
+        imagedestroy($image);
+
+        $sanitizer = new Sanitizer();
+        $result = $sanitizer->sanitize($inputPath, $outputPath);
+
+        $this->assertTrue($result);
+        $this->assertFileExists($outputPath);
+        $this->assertTrue($this->isValidWebp($outputPath));
+
+        unlink($inputPath);
+        unlink($outputPath);
+    }
+
     public function testMetaProbeFacadeProbeAndScan(): void
     {
         $inputPath = tempnam(sys_get_temp_dir(), 'metaprobe_facade_') . '.jpg';
@@ -246,6 +306,29 @@ final class ProbeTest extends TestCase
         $this->assertInstanceOf(Metadata::class, $report->getMetadata());
 
         $this->assertIsArray($metadata->toArray());
+
+        unlink($inputPath);
+    }
+
+    public function testMetaProbeSupportsModernFormats(): void
+    {
+        if (!function_exists('imagewebp')) {
+            $this->markTestSkipped('GD WebP support not available');
+        }
+
+        $inputPath = tempnam(sys_get_temp_dir(), 'metaprobe_modern_') . '.webp';
+
+        $image = imagecreatetruecolor(80, 80);
+        $color = imagecolorallocate($image, 255, 0, 128);
+        imagefill($image, 0, 0, $color);
+        imagewebp($image, $inputPath, 90);
+        imagedestroy($image);
+
+        $metadata = MetaProbe::probe($inputPath);
+        $this->assertInstanceOf(Metadata::class, $metadata);
+
+        $report = MetaProbe::scan($inputPath);
+        $this->assertInstanceOf(SecurityReport::class, $report);
 
         unlink($inputPath);
     }
@@ -287,6 +370,24 @@ final class ProbeTest extends TestCase
         }
 
         $img = @imagecreatefromjpeg($path);
+        if ($img === false) {
+            return false;
+        }
+
+        imagedestroy($img);
+        return true;
+    }
+
+    /**
+     * Helper to verify a file is a valid WebP by attempting to create an image resource.
+     */
+    private function isValidWebp(string $path): bool
+    {
+        if (!file_exists($path) || filesize($path) < 100) {
+            return false;
+        }
+
+        $img = @imagecreatefromwebp($path);
         if ($img === false) {
             return false;
         }
