@@ -157,6 +157,24 @@ final class ProbeTest extends TestCase
         $this->assertSame(100, $score);
     }
 
+    public function testSecurityReportHoldsDataCorrectly(): void
+    {
+        $metadata = new Metadata(
+            exif: ['DateTime' => '2023:01:01 12:00:00']
+        );
+
+        $report = new SecurityReport(
+            score: 75,
+            risks: ['GPS coordinates present (high privacy risk)', 'Author/creator information detected: John Doe'],
+            metadata: $metadata
+        );
+
+        $this->assertSame(75, $report->getScore());
+        $this->assertCount(2, $report->getRisks());
+        $this->assertSame($metadata, $report->getMetadata());
+        $this->assertInstanceOf(Metadata::class, $report->getMetadata());
+    }
+
     public function testIsSensitiveCorrectlyIdentifiesRisks(): void
     {
         $scanner = new Scanner();
