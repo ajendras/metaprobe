@@ -21,7 +21,7 @@ final class Scanner
      */
     private const SENSITIVE_PATTERNS = [
         'gps' => '/^(gps|latitude|longitude|gpslatitude|gpslongitude)/i',
-        'author' => '/^(author|creator|artist|byline|copyright|credit|owner)/i',
+        'author' => '/^(author|creator|artist|byline|credit|owner)/i',
         'device' => '/^(make|model|software|camera|devicename|serial)/i',
         'location' => '/^(city|state|province|country|location|address|position)/i',
     ];

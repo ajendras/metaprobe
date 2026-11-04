@@ -187,6 +187,7 @@ final class ProbeTest extends TestCase
         $this->assertFalse($scanner->isSensitive('ExposureTime', '1/100'));
         $this->assertFalse($scanner->isSensitive('ImageWidth', 1920));
         $this->assertFalse($scanner->isSensitive('title', ''));
+        $this->assertFalse($scanner->isSensitive('copyright', '© Public Domain'));
     }
 
     public function testSanitizerRemovesMetadataAndPreservesImage(): void
