@@ -1,0 +1,232 @@
+<?php
+
+declare(strict_types=1);
+
+namespace MetaProbe;
+
+use InvalidArgumentException;
+use MetaProbe\Gps;
+use MetaProbe\Metadata;
+use MetaProbe\Readers\ExifReader;
+use MetaProbe\Readers\IptcReader;
+use MetaProbe\Readers\ReaderInterface;
+use MetaProbe\Readers\XmpReader;
+use MetaProbe\Security\Sanitizer;
+use MetaProbe\Security\Scanner;
+use MetaProbe\Security\SecurityReport;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Main facade for the MetaProbe library.
+ *
+ * Provides a clean, unified API for metadata extraction, privacy scanning,
+ * and sanitization of JPEG, PNG and TIFF images.
+ */
+final class MetaProbe
+{
+    /**
+     * @var ReaderInterface[]
+     */
+    private array $readers;
+
+    private Scanner $scanner;
+    private Sanitizer $sanitizer;
+
+    public function __construct()
+    {
+        $this->readers = [
+            new ExifReader(),
+            new IptcReader(),
+            new XmpReader(),
+        ];
+
+        $this->scanner = new Scanner();
+        $this->sanitizer = new Sanitizer();
+    }
+
+    /**
+     * Probe an image and return a rich Metadata DTO.
+     *
+     * @param string $path Absolute or relative path to an image file
+     * @return Metadata Structured metadata container
+     * @throws InvalidArgumentException When the file is missing, unreadable or unsupported
+     */
+    public static function probe(string $path): Metadata
+    {
+        return (new self())->doProbe($path);
+    }
+
+    /**
+     * Scan an image for privacy and security risks.
+     *
+     * Returns a numeric safety score (0-100) and list of detected risks.
+     *
+     * @param string $path Absolute or relative path to an image file
+     * @return SecurityReport Detailed security analysis
+     * @throws InvalidArgumentException When the file cannot be processed
+     */
+    public static function scan(string $path): SecurityReport
+    {
+        return (new self())->doScan($path);
+    }
+
+    /**
+     * Sanitize an image by stripping sensitive metadata while preserving
+     * color profiles, copyright notices and essential structural data.
+     *
+     * If $outputPath is omitted the original file is overwritten (use with caution).
+     *
+     * @param string $inputPath Path to source image
+     * @param string|null $outputPath Where to write the sanitized image (null = overwrite)
+     * @return bool True on success
+     * @throws InvalidArgumentException When input is invalid
+     * @throws RuntimeException When sanitization fails
+     */
+    public static function sanitize(string $inputPath, ?string $outputPath = null): bool
+    {
+        return (new self())->doSanitize($inputPath, $outputPath);
+    }
+
+    /**
+     * Instance implementation of probe().
+     */
+    private function doProbe(string $path): Metadata
+    {
+        $this->validateImage($path);
+        $mimeType = $this->detectMimeType($path);
+
+        if (!$this->isSupportedMime($mimeType)) {
+            throw new InvalidArgumentException(sprintf(
+                'Unsupported MIME type "%s". Supported types: image/jpeg, image/png, image/tiff.',
+                $mimeType
+            ));
+        }
+
+        $exifData = [];
+        $iptcData = [];
+        $xmpData = [];
+
+        foreach ($this->readers as $reader) {
+            if (!$reader->supports($mimeType)) {
+                continue;
+            }
+
+            try {
+                $data = $reader->read($path);
+
+                if ($reader instanceof ExifReader) {
+                    $exifData = $data;
+                } elseif ($reader instanceof IptcReader) {
+                    $iptcData = $data;
+                } elseif ($reader instanceof XmpReader) {
+                    $xmpData = $data;
+                }
+            } catch (Throwable $e) {
+                // Continue with partial data; errors are surfaced in SecurityReport
+            }
+        }
+
+        $gps = null;
+        if (!empty($exifData['GPSLatitude']) && !empty($exifData['GPSLongitude'])) {
+            $gps = Gps::fromExif($exifData);
+        } elseif (isset($exifData['GPS']) && is_array($exifData['GPS'])) {
+            $gps = Gps::fromExif($exifData['GPS']);
+        }
+
+        return new Metadata(
+            exif: $exifData,
+            iptc: $iptcData,
+            xmp: $xmpData,
+            gps: $gps
+        );
+    }
+
+    /**
+     * Instance implementation of scan().
+     */
+    private function doScan(string $path): SecurityReport
+    {
+        $metadata = $this->doProbe($path);
+
+        $risks = $this->scanner->getRisks($metadata);
+        $score = $this->scanner->calculateScore($metadata);
+
+        return new SecurityReport(
+            score: $score,
+            risks: $risks,
+            metadata: $metadata
+        );
+    }
+
+    /**
+     * Instance implementation of sanitize().
+     */
+    private function doSanitize(string $inputPath, ?string $outputPath = null): bool
+    {
+        $this->validateImage($inputPath);
+
+        if ($outputPath === null) {
+            $outputPath = $inputPath;
+        }
+
+        if (!is_writable(dirname($outputPath))) {
+            throw new InvalidArgumentException(sprintf(
+                'Output directory is not writable: %s',
+                dirname($outputPath)
+            ));
+        }
+
+        return $this->sanitizer->sanitize($inputPath, $outputPath);
+    }
+
+    /**
+     * Validates that a file exists, is readable and is a regular file.
+     */
+    private function validateImage(string $path): void
+    {
+        if (!file_exists($path)) {
+            throw new InvalidArgumentException(sprintf('File does not exist: %s', $path));
+        }
+
+        if (!is_file($path)) {
+            throw new InvalidArgumentException(sprintf('Path is not a regular file: %s', $path));
+        }
+
+        if (!is_readable($path)) {
+            throw new InvalidArgumentException(sprintf('File is not readable: %s', $path));
+        }
+    }
+
+    /**
+     * Detect MIME type using PHP's built-in function.
+     */
+    private function detectMimeType(string $path): string
+    {
+        $mime = mime_content_type($path);
+
+        if ($mime === false) {
+            throw new RuntimeException(sprintf('Failed to detect MIME type for %s', $path));
+        }
+
+        return $mime;
+    }
+
+    /**
+     * Returns whether the given MIME type can be processed by this library.
+     */
+    private function isSupportedMime(string $mimeType): bool
+    {
+        return in_array($mimeType, ['image/jpeg', 'image/png', 'image/tiff'], true);
+    }
+
+    /**
+     * Returns the list of registered readers (useful for debugging or extension).
+     *
+     * @return ReaderInterface[]
+     */
+    public function getReaders(): array
+    {
+        return $this->readers;
+    }
+}

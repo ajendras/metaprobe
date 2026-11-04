@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="572" viewBox="0 0 900 572" role="img" aria-label="MetaProbe — demo">
+  <style>
+    text{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:15px}
+    .l{opacity:0}
+    .ty{clip-path:inset(0 100% 0 0)}
+    .cur{animation:blink 1s steps(1) infinite}
+    @keyframes show{to{opacity:1}}
+    @keyframes type{to{clip-path:inset(0 0 0 0)}}
+    @keyframes blink{50%{opacity:0}}
+    @media (prefers-reduced-motion:reduce){.l{opacity:1;animation:none!important}.ty{clip-path:none;animation:none!important}}
+  </style>
+  <rect width="900" height="572" rx="14" fill="#0d1117"/>
+  <rect x=".5" y=".5" width="899" height="572" rx="14" fill="none" stroke="#30363d"/>
+  <rect width="900" height="40" rx="14" fill="#161b22"/><rect y="26" width="900" height="14" fill="#161b22"/>
+  <circle cx="24" cy="20" r="6" fill="#ff5f57"/><circle cx="44" cy="20" r="6" fill="#febc2e"/><circle cx="64" cy="20" r="6" fill="#28c840"/>
+  <text x="450" y="25" text-anchor="middle" fill="#8b949e" style="font-size:13px">MetaProbe — demo</text>
+<text x="28" y="74" class="l" style="animation:show .01s 0.60s forwards"><tspan fill="#00c4b4">❯</tspan></text><text x="50" y="74" class="l ty" style="animation:show .01s 0.60s forwards,type 1.62s steps(36) 0.60s forwards" fill="#e5e7eb">composer require metaprobe/metaprobe</text>
+<text x="50" y="100" class="l" style="animation:show .01s 2.52s forwards" fill="#94a3b8">Using version ^1.0</text>
+<text x="50" y="126" class="l" style="animation:show .01s 2.74s forwards" fill="#94a3b8">Generating autoload files</text>
+<text x="50" y="152" class="l" style="animation:show .01s 2.96s forwards" fill="#94a3b8">metaprobe/metaprobe installed</text>
+<text x="28" y="204" class="l" style="animation:show .01s 3.53s forwards"><tspan fill="#00c4b4">❯</tspan></text><text x="50" y="204" class="l ty" style="animation:show .01s 3.53s forwards,type 2.12s steps(47) 3.53s forwards" fill="#e5e7eb">php bin/metaprobe probe photo.jpg --format=json</text>
+<text x="50" y="230" class="l" style="animation:show .01s 5.95s forwards" fill="#94a3b8">{</text>
+<text x="50" y="256" class="l" style="animation:show .01s 6.17s forwards" fill="#94a3b8">&quot;camera&quot;: &quot;Canon EOS R5&quot;,</text>
+<text x="50" y="282" class="l" style="animation:show .01s 6.39s forwards" fill="#94a3b8">&quot;gps&quot;: {&quot;lat&quot;: 51.5074, &quot;lng&quot;: -0.1278},</text>
+<text x="50" y="308" class="l" style="animation:show .01s 6.61s forwards" fill="#94a3b8">&quot;privacy_score&quot;: 42</text>
+<text x="28" y="360" class="l" style="animation:show .01s 7.18s forwards"><tspan fill="#00c4b4">❯</tspan></text><text x="50" y="360" class="l ty" style="animation:show .01s 7.18s forwards,type 2.20s steps(55) 7.18s forwards" fill="#e5e7eb">php bin/metaprobe sanitize photo.jpg --output clean.jpg</text>
+<text x="50" y="386" class="l" style="animation:show .01s 9.68s forwards" fill="#4ade80">✓ 14 tags removed</text>
+<text x="50" y="412" class="l" style="animation:show .01s 9.90s forwards" fill="#94a3b8">Privacy score improved: 42 → 94</text>
+<text x="50" y="438" class="l" style="animation:show .01s 10.12s forwards" fill="#94a3b8">clean.jpg (2.1 MB) written</text>
+<text x="28" y="490" class="l" style="animation:show .01s 10.69s forwards"><tspan fill="#00c4b4">❯</tspan></text><text x="50" y="490" class="l ty" style="animation:show .01s 10.69s forwards,type 1.26s steps(28) 10.69s forwards" fill="#e5e7eb">php examples/basic-usage.php</text>
+<text x="50" y="516" class="l" style="animation:show .01s 12.25s forwards" fill="#94a3b8">Camera: Nikon Z7</text>
+<g class="l" style="animation:show .01s 12.47s forwards"><text x="28" y="542" fill="#00c4b4">❯</text><rect class="cur" x="50" y="527" width="10" height="18" fill="#e5e7eb"/></g>
+</svg>
