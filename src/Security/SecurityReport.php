@@ -7,10 +7,9 @@ namespace MetaProbe\Security;
 use MetaProbe\Metadata;
 
 /**
- * Immutable report returned by the privacy scanner.
+ * Immutable report containing privacy score, list of risks and the metadata.
  *
- * Contains the calculated safety score, list of human-readable risks,
- * and a reference to the original Metadata DTO.
+ * Also exposes a convenience method for steganography risk detection.
  */
 final class SecurityReport
 {
@@ -24,17 +23,12 @@ final class SecurityReport
     ) {
     }
 
-    /**
-     * Returns the privacy safety score (0-100).
-     */
     public function getScore(): int
     {
         return $this->score;
     }
 
     /**
-     * Returns the list of detected privacy risks.
-     *
      * @return list<string>
      */
     public function getRisks(): array
@@ -42,11 +36,28 @@ final class SecurityReport
         return $this->risks;
     }
 
-    /**
-     * Returns the underlying Metadata DTO.
-     */
     public function getMetadata(): Metadata
     {
         return $this->metadata;
+    }
+
+    public function isSafe(): bool
+    {
+        return $this->score >= 70;
+    }
+
+    /**
+     * Returns true when any risk indicates possible LSB steganography.
+     */
+    public function hasSteganographyRisk(): bool
+    {
+        foreach ($this->risks as $risk) {
+            $lower = strtolower($risk);
+            if (str_contains($lower, 'steganography') || str_contains($lower, 'lsb')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

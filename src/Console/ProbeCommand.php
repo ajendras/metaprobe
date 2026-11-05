@@ -136,6 +136,11 @@ final class ProbeCommand extends Command
             $io->success('No privacy risks detected');
         }
 
+        if ($report->hasSteganographyRisk()) {
+            $io->newLine();
+            $io->error('STEganography WARNING: unusual LSB patterns detected — possible hidden data');
+        }
+
         $io->newLine();
     }
 

@@ -16,6 +16,7 @@ use MetaProbe\Readers\XmpReader;
 use MetaProbe\Security\Sanitizer;
 use MetaProbe\Security\Scanner;
 use MetaProbe\Security\SecurityReport;
+use MetaProbe\Security\SteganographyDetector;
 use Psr\Http\Server\MiddlewareInterface;
 use RuntimeException;
 use Throwable;
@@ -62,7 +63,7 @@ final class MetaProbe
     }
 
     /**
-     * Scan an image for privacy and security risks.
+     * Scan an image for privacy and security risks (including LSB steganography).
      *
      * Returns a numeric safety score (0-100) and list of detected risks.
      *
@@ -73,6 +74,17 @@ final class MetaProbe
     public static function scan(string $path): SecurityReport
     {
         return (new self())->doScan($path);
+    }
+
+    /**
+     * Detect potential steganography by analyzing LSB patterns in the image pixels.
+     *
+     * @param string $path Path to image file
+     * @return array{risks: list<string>, scorePenalty: int} Steganography analysis result
+     */
+    public static function detectSteganography(string $path): array
+    {
+        return (new self())->doDetectSteganography($path);
     }
 
     /**
@@ -197,14 +209,25 @@ final class MetaProbe
     {
         $metadata = $this->doProbe($path);
 
-        $risks = $this->scanner->getRisks($metadata);
-        $score = $this->scanner->calculateScore($metadata);
+        $risks = $this->scanner->getRisks($metadata, $path);
+        $score = $this->scanner->calculateScore($metadata, $path);
 
         return new SecurityReport(
             score: $score,
             risks: $risks,
             metadata: $metadata
         );
+    }
+
+    /**
+     * Instance implementation of detectSteganography().
+     */
+    private function doDetectSteganography(string $path): array
+    {
+        $this->validateImage($path);
+        $detector = new SteganographyDetector();
+
+        return $detector->analyze($path);
     }
 
     /**
@@ -296,8 +319,8 @@ final class MetaProbe
 
             try {
                 $metadata = $this->doProbe($filePath);
-                $risks = $this->scanner->getRisks($metadata);
-                $score = $this->scanner->calculateScore($metadata);
+                $risks = $this->scanner->getRisks($metadata, $filePath);
+                $score = $this->scanner->calculateScore($metadata, $filePath);
                 $exif = $metadata->getExif();
                 $gps = $metadata->getGps();
 

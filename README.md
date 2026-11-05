@@ -43,17 +43,17 @@ PHP web apps regularly process user images yet lack a unified, security-first to
 </tr>
 <tr>
 <td>🧼 <b>Smart Sanitizer</b><br>Rewrites images stripping PII while preserving copyright and profiles (GD + Imagick fallback)</td>
+<td>🔍 <b>Steganography Detector</b><br>Analyzes LSB patterns in pixel data and flags statistically unusual randomness that may indicate hidden information</td>
 <td>🖥️ <b>Rich CLI</b><br><code>probe</code> and <code>sanitize</code> commands with JSON output, pretty tables and verbose reporting</td>
-<td>📦 <b>Structured Reports</b><br>Metadata DTO with <code>toArray()</code>, <code>toJson()</code>, typed getters and <code>getPrivacyScore()</code></td>
 </tr>
 <tr>
+<td>📦 <b>Structured Reports</b><br>Metadata DTO with <code>toArray()</code>, <code>toJson()</code>, typed getters and <code>getPrivacyScore()</code></td>
 <td>🔌 <b>Reader Interface</b><br>Pluggable readers so custom formats can be added by implementing <code>supports()</code> and <code>read()</code></td>
 <td>📊 <b>Batch CLI</b><br>Directory scanning with Symfony ProgressBar, per-image reports and CSV summary export for bulk analysis</td>
-<td>🌐 <b>PSR-15 Middleware</b><br>Auto-sanitizes image uploads in any PSR-15 framework (Slim, Laminas, Symfony, etc.)</td>
 </tr>
 <tr>
+<td>🌐 <b>PSR-15 Middleware</b><br>Auto-sanitizes image uploads in any PSR-15 framework (Slim, Laminas, Symfony, etc.)</td>
 <td>⚙️ <b>Zero-config Core</b><br>Depends only on PHP extensions; optional Symfony Console for the CLI</td>
-<td></td>
 <td></td>
 </tr>
 </table>
@@ -91,6 +91,10 @@ if ($gps = $metadata->getGps()) {
 }
 
 echo "\nPrivacy Score: " . $report->getScore() . "/100\n";
+
+if ($report->hasSteganographyRisk()) {
+    echo "\n⚠️  Potential steganography detected (unusual LSB patterns)\n";
+}
 ```
 
 ## 🧰 Usage
@@ -114,6 +118,19 @@ if ($gps = $metadata->getGps()) {
 }
 
 echo "\nSafety: " . $report->getScore() . "/100";
+
+if ($report->hasSteganographyRisk()) {
+    echo "\n⚠️ Steganography risk: unusual LSB patterns detected";
+}
+```
+
+### Standalone steganography check
+
+```php
+$stego = MetaProbe::detectSteganography('image.jpg');
+if (!empty($stego['risks'])) {
+    echo "Steganography risks: " . implode(', ', $stego['risks']);
+}
 ```
 
 ### PSR-15 Middleware (new)
@@ -233,8 +250,8 @@ flowchart TD
     Readers -->|supports + read| Data[Normalized arrays]
     Data --> Metadata[Metadata DTO]
     Metadata --> Gps[Gps Value Object<br/>fromExif → decimal + Google Maps URL]
-    MetaProbe --> Scanner[Scanner<br/>isSensitive + calculateScore]
-    Scanner --> Report[SecurityReport<br/>score + risks]
+    MetaProbe --> Scanner[Scanner<br/>isSensitive + calculateScore + SteganographyDetector]
+    Scanner --> Report[SecurityReport<br/>score + risks + hasSteganographyRisk()]
     MetaProbe --> Sanitizer[Sanitizer<br/>GD imagecopy or Imagick stripImage]
     Middleware --> Sanitizer
     MetaProbe --> Console[Console Commands<br/>ProbeCommand • SanitizeCommand • BatchCommand]
@@ -262,8 +279,10 @@ The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Me
 │   │   ├── XmpReader.php         # APP1 XMP packet extraction via SimpleXML + XPath
 │   │   └── ImagickReader.php     # Imagick getImageProperties() for WebP, AVIF, HEIC + normalization
 │   ├── Security/
-│   │   ├── Scanner.php           # getRisks(), calculateScore(), isSensitive()
-│   │   └── Sanitizer.php         # GD imagecopy or Imagick stripImage (now with WebP/AVIF/HEIC)
+│   │   ├── Scanner.php           # getRisks(), calculateScore(), isSensitive() + SteganographyDetector
+│   │   ├── SteganographyDetector.php # LSB randomness analysis on pixel data
+│   │   ├── Sanitizer.php         # GD imagecopy or Imagick stripImage (now with WebP/AVIF/HEIC)
+│   │   └── SecurityReport.php    # score + risks + hasSteganographyRisk()
 │   └── Console/
 │       ├── ProbeCommand.php      # Symfony command with --format and --sanitize options
 │       └── BatchCommand.php      # New: directory scanner with ProgressBar, per-file summary and CSV export
@@ -291,7 +310,7 @@ The suite covers GPS DMS-to-decimal conversion, extraction accuracy on fixture i
 - [x] Add WebP, AVIF and HEIC format support via native or Imagick readers
 - [x] Batch directory command with progress bar and summary CSV export
 - [x] PSR-15 middleware that auto-sanitizes uploaded images in frameworks
-- [ ] Steganography detector that flags unusual LSB patterns
+- [x] Steganography detector that flags unusual LSB patterns
 - [ ] HTML report generator with interactive metadata tree view
 - [ ] OpenAI integration to generate alt-text from extracted context
 - [ ] Laravel and Symfony service provider / bundle auto-registration
