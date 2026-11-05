@@ -47,6 +47,7 @@ PHP web apps regularly process user images yet lack a unified, security-first to
 </tr>
 <tr>
 <td>🔌 <b>Reader Interface</b><br>Pluggable readers so custom formats can be added by implementing <code>supports()</code> and <code>read()</code></td>
+<td>📊 <b>Batch CLI</b><br>Directory scanning with Symfony ProgressBar, per-image reports and CSV summary export for bulk analysis</td>
 <td>⚙️ <b>Zero-config Core</b><br>Depends only on PHP extensions; optional Symfony Console for the CLI</td>
 </tr>
 </table>
@@ -119,6 +120,35 @@ php bin/metaprobe probe photo.jpg
 php bin/metaprobe probe photo.jpg --format=json --sanitize
 ```
 
+### Batch processing
+
+```bash
+# Process directory with live progress bar and CSV export
+php bin/metaprobe batch ./photos --output=summary.csv
+
+# Recursive scan + sanitization
+php bin/metaprobe batch ./uploads -r --sanitize
+```
+
+The batch command discovers supported images, shows a real-time progress bar, extracts metadata/privacy scores for every file, writes a detailed CSV report, and can optionally sanitize images in-place.
+
+```php
+use MetaProbe\MetaProbe;
+
+// Batch API returns structured summary (no progress bar)
+$summary = MetaProbe::batch(__DIR__ . '/photos', recursive: true);
+
+foreach ($summary as $item) {
+    echo $item['filename'] . ': ' . $item['privacy_score'] . '/100';
+    if (!empty($item['gps_coordinates'])) {
+        echo ' (GPS: ' . $item['gps_coordinates'] . ')';
+    }
+    echo "\n";
+}
+
+echo "\nProcessed " . count($summary) . " images.\n";
+```
+
 ### Sanitization
 
 ```php
@@ -182,7 +212,7 @@ flowchart TD
     MetaProbe --> Scanner[Scanner<br/>isSensitive + calculateScore]
     Scanner --> Report[SecurityReport<br/>score + risks]
     MetaProbe --> Sanitizer[Sanitizer<br/>GD imagecopy or Imagick stripImage]
-    MetaProbe --> Console[Console Commands<br/>ProbeCommand • SanitizeCommand]
+    MetaProbe --> Console[Console Commands<br/>ProbeCommand • SanitizeCommand • BatchCommand]
     Console -->|Symfony Console| CLI[bin/metaprobe]
 ```
 
@@ -193,9 +223,9 @@ The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Me
 ```text
 .
 ├── bin/
-│   └── metaprobe                 # CLI bootstrap: registers ProbeCommand & SanitizeCommand
+│   └── metaprobe                 # CLI bootstrap: registers ProbeCommand, SanitizeCommand & BatchCommand
 ├── src/
-│   ├── MetaProbe.php             # Facade with static probe(), scan(), sanitize()
+│   ├── MetaProbe.php             # Facade with static probe(), scan(), sanitize(), batch() and findImages()
 │   ├── Metadata.php              # Immutable DTO with getters, toArray(), toJson(), getPrivacyScore()
 │   ├── Gps.php                   # Value object: fromExif(), getDecimal(), getGoogleMapsUrl()
 │   ├── ReaderInterface.php       # supports() + read() contract
@@ -208,12 +238,13 @@ The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Me
 │   │   ├── Scanner.php           # getRisks(), calculateScore(), isSensitive()
 │   │   └── Sanitizer.php         # GD imagecopy or Imagick stripImage (now with WebP/AVIF/HEIC)
 │   └── Console/
-│       └── ProbeCommand.php      # Symfony command with --format and --sanitize options
+│       ├── ProbeCommand.php      # Symfony command with --format and --sanitize options
+│       └── BatchCommand.php      # New: directory scanner with ProgressBar, per-file summary and CSV export
 ├── tests/
-│   └── ProbeTest.php             # PHPUnit tests for Gps, Metadata, Scanner, Sanitizer and facade
+│   └── ProbeTest.php             # PHPUnit tests for Gps, Metadata, Scanner, Sanitizer, facade and batch
 ├── examples/
 │   └── basic-usage.php           # Runnable demo script using the facade
-├── composer.json                 # PSR-4, bin, scripts (test/probe/sanitize)
+├── composer.json                 # PSR-4, bin, scripts (test/probe/sanitize/batch)
 └── vendor/                       # (after composer install)
 ```
 
@@ -225,13 +256,13 @@ composer test
 vendor/bin/phpunit
 ```
 
-The suite covers GPS DMS-to-decimal conversion, extraction accuracy on fixture images, `Scanner` risk detection and scoring, `Sanitizer` output size and tag removal, plus full facade integration paths.
+The suite covers GPS DMS-to-decimal conversion, extraction accuracy on fixture images, `Scanner` risk detection and scoring, `Sanitizer` output size and tag removal, full facade integration paths, plus the new `batch()` / `findImages()` methods.
 
 ## 📍 Roadmap
 <!-- roadmap:start -->
 - [x] **v0.1.0** — first release: Unified Extraction, GPS Decoder, Privacy Scanner, Smart Sanitizer
 - [x] Add WebP, AVIF and HEIC format support via native or Imagick readers
-- [ ] Batch directory command with progress bar and summary CSV export
+- [x] Batch directory command with progress bar and summary CSV export
 - [ ] PSR-15 middleware that auto-sanitizes uploaded images in frameworks
 - [ ] Steganography detector that flags unusual LSB patterns
 - [ ] HTML report generator with interactive metadata tree view

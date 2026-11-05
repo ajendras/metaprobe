@@ -22,7 +22,7 @@ use Throwable;
  * Main facade for the MetaProbe library.
  *
  * Provides a clean, unified API for metadata extraction, privacy scanning,
- * and sanitization of JPEG, PNG, TIFF, WebP, AVIF and HEIC images.
+ * sanitization and batch directory processing of JPEG, PNG, TIFF, WebP, AVIF and HEIC images.
  */
 final class MetaProbe
 {
@@ -88,6 +88,36 @@ final class MetaProbe
     public static function sanitize(string $inputPath, ?string $outputPath = null): bool
     {
         return (new self())->doSanitize($inputPath, $outputPath);
+    }
+
+    /**
+     * Returns all supported image files inside a directory.
+     *
+     * @param string $directory Directory to scan
+     * @param bool $recursive Whether to traverse subdirectories
+     * @return list<string> Absolute paths to supported image files, sorted
+     * @throws InvalidArgumentException When directory is invalid
+     */
+    public static function findImages(string $directory, bool $recursive = false): array
+    {
+        return (new self())->doFindImages($directory, $recursive);
+    }
+
+    /**
+     * Batch-process every supported image in a directory.
+     *
+     * Returns a structured summary row for each file (metadata + privacy score).
+     * The optional $progressCallback is used by the CLI to drive a ProgressBar.
+     *
+     * @param string $directory Directory containing images
+     * @param bool $recursive Whether to scan subdirectories
+     * @param callable|null $progressCallback Signature: fn(int $processed, int $total, string $file): void
+     * @return array<int, array<string, mixed>> Summary rows
+     * @throws InvalidArgumentException When directory is invalid
+     */
+    public static function batch(string $directory, bool $recursive = false, ?callable $progressCallback = null): array
+    {
+        return (new self())->doBatch($directory, $recursive, $progressCallback);
     }
 
     /**
@@ -185,6 +215,111 @@ final class MetaProbe
     }
 
     /**
+     * Instance implementation of findImages().
+     */
+    private function doFindImages(string $directory, bool $recursive = false): array
+    {
+        $this->validateDirectory($directory);
+
+        $supportedExts = ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp', 'avif', 'heic'];
+        $files = [];
+
+        if ($recursive) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator(
+                    $directory,
+                    \RecursiveDirectoryIterator::SKIP_DOTS | \RecursiveDirectoryIterator::FOLLOW_SYMLINKS
+                )
+            );
+
+            /** @var \SplFileInfo $fileInfo */
+            foreach ($iterator as $fileInfo) {
+                if ($fileInfo->isFile()) {
+                    $ext = strtolower($fileInfo->getExtension());
+                    if (in_array($ext, $supportedExts, true)) {
+                        $files[] = $fileInfo->getPathname();
+                    }
+                }
+            }
+        } else {
+            $items = scandir($directory);
+            if ($items === false) {
+                return [];
+            }
+
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..') {
+                    continue;
+                }
+
+                $path = $directory . DIRECTORY_SEPARATOR . $item;
+                if (is_file($path)) {
+                    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                    if (in_array($ext, $supportedExts, true)) {
+                        $files[] = $path;
+                    }
+                }
+            }
+        }
+
+        sort($files);
+        return $files;
+    }
+
+    /**
+     * Instance implementation of batch().
+     */
+    private function doBatch(string $directory, bool $recursive = false, ?callable $progressCallback = null): array
+    {
+        $files = $this->doFindImages($directory, $recursive);
+        $summary = [];
+        $total = count($files);
+
+        foreach ($files as $index => $filePath) {
+            if ($progressCallback !== null) {
+                $progressCallback($index + 1, $total, $filePath);
+            }
+
+            try {
+                $metadata = $this->doProbe($filePath);
+                $risks = $this->scanner->getRisks($metadata);
+                $score = $this->scanner->calculateScore($metadata);
+                $exif = $metadata->getExif();
+                $gps = $metadata->getGps();
+
+                $summary[] = [
+                    'filename' => basename($filePath),
+                    'path' => $filePath,
+                    'mime_type' => $this->detectMimeType($filePath),
+                    'size_kb' => round(filesize($filePath) / 1024, 2),
+                    'privacy_score' => $score,
+                    'risks_count' => count($risks),
+                    'has_gps' => $gps !== null ? 'YES' : 'NO',
+                    'gps_coordinates' => $gps !== null ? (string) $gps : '',
+                    'camera' => $exif['Camera'] ?? ($exif['Model'] ?? 'N/A'),
+                    'date_taken' => $exif['DateTimeOriginal'] ?? ($exif['DateTime'] ?? 'N/A'),
+                    'risk_details' => $risks,
+                ];
+            } catch (Throwable $e) {
+                $summary[] = [
+                    'filename' => basename($filePath),
+                    'path' => $filePath,
+                    'error' => $e->getMessage(),
+                    'privacy_score' => 0,
+                    'risks_count' => 0,
+                    'has_gps' => 'NO',
+                    'gps_coordinates' => '',
+                    'camera' => 'N/A',
+                    'date_taken' => 'N/A',
+                    'risk_details' => [],
+                ];
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
      * Validates that a file exists, is readable and is a regular file.
      */
     private function validateImage(string $path): void
@@ -199,6 +334,24 @@ final class MetaProbe
 
         if (!is_readable($path)) {
             throw new InvalidArgumentException(sprintf('File is not readable: %s', $path));
+        }
+    }
+
+    /**
+     * Validates a directory for batch processing.
+     */
+    private function validateDirectory(string $directory): void
+    {
+        if (!file_exists($directory)) {
+            throw new InvalidArgumentException(sprintf('Directory does not exist: %s', $directory));
+        }
+
+        if (!is_dir($directory)) {
+            throw new InvalidArgumentException(sprintf('Path is not a directory: %s', $directory));
+        }
+
+        if (!is_readable($directory)) {
+            throw new InvalidArgumentException(sprintf('Directory is not readable: %s', $directory));
         }
     }
 

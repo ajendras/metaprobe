@@ -39,7 +39,8 @@
     "scripts": {
         "test": "vendor/bin/phpunit",
         "probe": "php bin/metaprobe probe",
-        "sanitize": "php bin/metaprobe sanitize"
+        "sanitize": "php bin/metaprobe sanitize",
+        "batch": "php bin/metaprobe batch"
     },
     "extra": {
         "branch-alias": {

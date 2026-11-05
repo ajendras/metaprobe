@@ -5,41 +5,23 @@ declare(strict_types=1);
 
 namespace MetaProbe;
 
+use MetaProbe\Console\BatchCommand;
 use MetaProbe\Console\ProbeCommand;
 use MetaProbe\Console\SanitizeCommand;
 use Symfony\Component\Console\Application;
 
-if (\PHP_SAPI !== 'cli') {
-    fwrite(STDERR, "This script must be run from the command line.\n");
-    exit(1);
-}
-
-// Support both local development and Composer vendor/bin usage
-$autoloadPaths = [
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php',
-];
-
-$autoloadFound = false;
-foreach ($autoloadPaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $autoloadFound = true;
-        break;
-    }
-}
-
-if (!$autoloadFound) {
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+} elseif (file_exists(__DIR__ . '/../../../autoload.php')) {
+    require_once __DIR__ . '/../../../autoload.php';
+} else {
     fwrite(STDERR, "Autoloader not found. Please run 'composer install'.\n");
     exit(1);
 }
 
-$app = new Application('MetaProbe', '1.0.0');
-$app->setDefaultCommand('probe', true);
-
-$app->addCommands([
-    new ProbeCommand(),
-    new SanitizeCommand(),
-]);
+$app = new Application('MetaProbe', '1.1.0');
+$app->add(new ProbeCommand());
+$app->add(new SanitizeCommand());
+$app->add(new BatchCommand());
 
 $app->run();
