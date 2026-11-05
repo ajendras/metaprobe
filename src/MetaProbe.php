@@ -7,6 +7,7 @@ namespace MetaProbe;
 use InvalidArgumentException;
 use MetaProbe\Gps;
 use MetaProbe\Metadata;
+use MetaProbe\Middleware\ImageSanitizationMiddleware;
 use MetaProbe\Readers\ExifReader;
 use MetaProbe\Readers\ImagickReader;
 use MetaProbe\Readers\IptcReader;
@@ -15,6 +16,7 @@ use MetaProbe\Readers\XmpReader;
 use MetaProbe\Security\Sanitizer;
 use MetaProbe\Security\Scanner;
 use MetaProbe\Security\SecurityReport;
+use Psr\Http\Server\MiddlewareInterface;
 use RuntimeException;
 use Throwable;
 
@@ -118,6 +120,18 @@ final class MetaProbe
     public static function batch(string $directory, bool $recursive = false, ?callable $progressCallback = null): array
     {
         return (new self())->doBatch($directory, $recursive, $progressCallback);
+    }
+
+    /**
+     * Returns a PSR-15 middleware that automatically detects and sanitizes
+     * any uploaded images (by client media type) before they reach your
+     * application handlers.
+     *
+     * @param bool $throwOnFailure Whether to throw exceptions instead of silently continuing on failure
+     */
+    public static function middleware(bool $throwOnFailure = false): MiddlewareInterface
+    {
+        return new ImageSanitizationMiddleware($throwOnFailure);
     }
 
     /**

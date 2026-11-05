@@ -27,6 +27,7 @@ PHP web apps regularly process user images yet lack a unified, security-first to
 - **Built-in privacy scanning** — flags risky fields and returns a 0-100 safety score
 - **Smart sanitization** — strips PII while preserving quality, copyright and color profiles
 - **Rich, zero-config API** — immutable DTOs, GPS value object, pluggable readers and a beautiful CLI
+- **PSR-15 middleware** — drop-in auto-sanitization for uploaded images in any modern PHP framework
 
 ## 🎬 Demo
 
@@ -48,13 +49,18 @@ PHP web apps regularly process user images yet lack a unified, security-first to
 <tr>
 <td>🔌 <b>Reader Interface</b><br>Pluggable readers so custom formats can be added by implementing <code>supports()</code> and <code>read()</code></td>
 <td>📊 <b>Batch CLI</b><br>Directory scanning with Symfony ProgressBar, per-image reports and CSV summary export for bulk analysis</td>
+<td>🌐 <b>PSR-15 Middleware</b><br>Auto-sanitizes image uploads in any PSR-15 framework (Slim, Laminas, Symfony, etc.)</td>
+</tr>
+<tr>
 <td>⚙️ <b>Zero-config Core</b><br>Depends only on PHP extensions; optional Symfony Console for the CLI</td>
+<td></td>
+<td></td>
 </tr>
 </table>
 
 ## 📦 Installation
 
-**Requirements:** PHP 8.2+, `ext-exif`, `ext-xml`, `ext-gd` (`ext-imagick` recommended for WebP, AVIF and HEIC metadata and sanitization). Symfony Console is required only for the CLI.
+**Requirements:** PHP 8.2+, `ext-exif`, `ext-xml`, `ext-gd` (`ext-imagick` recommended for WebP, AVIF and HEIC metadata and sanitization). Symfony Console is required only for the CLI. PSR-15 interfaces are required for the middleware.
 
 ```bash
 composer require ajendras/metaprobe
@@ -108,6 +114,23 @@ if ($gps = $metadata->getGps()) {
 }
 
 echo "\nSafety: " . $report->getScore() . "/100";
+```
+
+### PSR-15 Middleware (new)
+
+```php
+use MetaProbe\MetaProbe;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
+
+// Register early in your pipeline (Slim, Laminas Mezzio, etc.)
+$app->add(MetaProbe::middleware(throwOnFailure: false));
+
+// The middleware automatically detects image/* uploads via
+// getUploadedFiles(), sanitizes their temporary files in-place
+// using the built-in Sanitizer, then passes the request onward.
+// Sensitive metadata never reaches your handlers or storage.
 ```
 
 ### CLI
@@ -204,7 +227,8 @@ $gps = $metadata->getGps()?->getDecimal();    // ['lat' => 51.5125, 'lng' => -0.
 
 ```mermaid
 flowchart TD
-    Image[Image File] --> MetaProbe[MetaProbe Facade]
+    HTTP[HTTP Request] --> Middleware[ImageSanitizationMiddleware<br/>(PSR-15)]
+    Middleware -->|detects image/* uploads| MetaProbe[MetaProbe Facade]
     MetaProbe --> Readers[Readers<br/>ExifReader • IptcReader • XmpReader • ImagickReader]
     Readers -->|supports + read| Data[Normalized arrays]
     Data --> Metadata[Metadata DTO]
@@ -212,11 +236,12 @@ flowchart TD
     MetaProbe --> Scanner[Scanner<br/>isSensitive + calculateScore]
     Scanner --> Report[SecurityReport<br/>score + risks]
     MetaProbe --> Sanitizer[Sanitizer<br/>GD imagecopy or Imagick stripImage]
+    Middleware --> Sanitizer
     MetaProbe --> Console[Console Commands<br/>ProbeCommand • SanitizeCommand • BatchCommand]
     Console -->|Symfony Console| CLI[bin/metaprobe]
 ```
 
-The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Metadata` object (with embedded `Gps` when present), then hands it to `Scanner` for privacy analysis or `Sanitizer` for cleaning. The design is intentionally zero-config while remaining easily extensible via `ReaderInterface`.
+The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Metadata` object (with embedded `Gps` when present), then hands it to `Scanner` for privacy analysis or `Sanitizer` for cleaning. The new PSR-15 middleware sits in front of your request handlers, automatically sanitizing any uploaded images before they reach application code. The design is intentionally zero-config while remaining easily extensible via `ReaderInterface`.
 
 ## 📁 Project structure
 
@@ -225,10 +250,12 @@ The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Me
 ├── bin/
 │   └── metaprobe                 # CLI bootstrap: registers ProbeCommand, SanitizeCommand & BatchCommand
 ├── src/
-│   ├── MetaProbe.php             # Facade with static probe(), scan(), sanitize(), batch() and findImages()
+│   ├── MetaProbe.php             # Facade with static probe(), scan(), sanitize(), batch(), middleware() and findImages()
 │   ├── Metadata.php              # Immutable DTO with getters, toArray(), toJson(), getPrivacyScore()
 │   ├── Gps.php                   # Value object: fromExif(), getDecimal(), getGoogleMapsUrl()
 │   ├── ReaderInterface.php       # supports() + read() contract
+│   ├── Middleware/
+│   │   └── ImageSanitizationMiddleware.php # PSR-15 middleware that auto-sanitizes uploads
 │   ├── Readers/
 │   │   ├── ExifReader.php        # exif_read_data() + normalization (Camera, Lens, Exposure, GPS)
 │   │   ├── IptcReader.php        # getimagesize() + iptcparse() mapping
@@ -241,7 +268,7 @@ The `MetaProbe` facade coordinates pluggable readers, assembles an immutable `Me
 │       ├── ProbeCommand.php      # Symfony command with --format and --sanitize options
 │       └── BatchCommand.php      # New: directory scanner with ProgressBar, per-file summary and CSV export
 ├── tests/
-│   └── ProbeTest.php             # PHPUnit tests for Gps, Metadata, Scanner, Sanitizer, facade and batch
+│   └── ProbeTest.php             # PHPUnit tests for Gps, Metadata, Scanner, Sanitizer, facade, batch and middleware
 ├── examples/
 │   └── basic-usage.php           # Runnable demo script using the facade
 ├── composer.json                 # PSR-4, bin, scripts (test/probe/sanitize/batch)
@@ -256,14 +283,14 @@ composer test
 vendor/bin/phpunit
 ```
 
-The suite covers GPS DMS-to-decimal conversion, extraction accuracy on fixture images, `Scanner` risk detection and scoring, `Sanitizer` output size and tag removal, full facade integration paths, plus the new `batch()` / `findImages()` methods.
+The suite covers GPS DMS-to-decimal conversion, extraction accuracy on fixture images, `Scanner` risk detection and scoring, `Sanitizer` output size and tag removal, full facade integration paths, plus the new `batch()` / `findImages()` methods and the PSR-15 middleware.
 
 ## 📍 Roadmap
 <!-- roadmap:start -->
 - [x] **v0.1.0** — first release: Unified Extraction, GPS Decoder, Privacy Scanner, Smart Sanitizer
 - [x] Add WebP, AVIF and HEIC format support via native or Imagick readers
 - [x] Batch directory command with progress bar and summary CSV export
-- [ ] PSR-15 middleware that auto-sanitizes uploaded images in frameworks
+- [x] PSR-15 middleware that auto-sanitizes uploaded images in frameworks
 - [ ] Steganography detector that flags unusual LSB patterns
 - [ ] HTML report generator with interactive metadata tree view
 - [ ] OpenAI integration to generate alt-text from extracted context

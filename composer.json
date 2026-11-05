@@ -1,7 +1,7 @@
 {
     "name": "metaprobe/metaprobe",
-    "description": "Extracts, analyzes and sanitizes EXIF, IPTC & XMP metadata in PHP with built-in privacy scanning and CLI",
-    "keywords": ["exif", "iptc", "xmp", "metadata", "gps", "privacy", "sanitizer", "forensics"],
+    "description": "Extracts, analyzes and sanitizes EXIF, IPTC & XMP metadata in PHP with built-in privacy scanning, CLI and PSR-15 middleware",
+    "keywords": ["exif", "iptc", "xmp", "metadata", "gps", "privacy", "sanitizer", "forensics", "psr-15", "middleware", "upload"],
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -14,7 +14,9 @@
         "ext-exif": "*",
         "ext-xml": "*",
         "ext-gd": "*",
-        "symfony/console": "^6.4"
+        "symfony/console": "^6.4",
+        "psr/http-message": "^1.1 || ^2.0",
+        "psr/http-server-middleware": "^1.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
