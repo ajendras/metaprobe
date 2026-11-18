@@ -70,6 +70,37 @@ if ($report->hasSteganographyRisk()) {
 }
 ```
 
+### Using the sanitization middleware
+
+`MetaProbe\Middleware\ImageSanitizationMiddleware` is a PSR-15 middleware. For every uploaded file whose client media type starts with `image/`, it runs `MetaProbe::sanitize()` on the temporary file before your handler sees the request. Registered here in a [Slim 4](https://www.slimframework.com/) app (any PSR-15 compatible framework works the same way):
+
+```php
+<?php
+
+require_once 'vendor/autoload.php';
+
+use MetaProbe\Middleware\ImageSanitizationMiddleware;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+$app = AppFactory::create();
+
+// Pass true to throw a RuntimeException when an image cannot be sanitized.
+// The default (false) skips the failing file and continues the request.
+$app->add(new ImageSanitizationMiddleware(throwOnFailure: false));
+
+$app->post('/upload', function (Request $request, Response $response) {
+    // Uploaded images have already been sanitized at this point.
+    $photo = $request->getUploadedFiles()['photo'];
+    $photo->moveTo(__DIR__ . '/uploads/' . $photo->getClientFilename());
+
+    return $response->withStatus(201);
+});
+
+$app->run();
+```
+
 ## Usage
 
 ```php
@@ -103,8 +134,6 @@ if (!empty($stego['risks'])) {
     echo "Steganography risks: " . implode(', ', $stego['risks']);
 }
 ```
-
-PSR-15 middleware is available via `ImageSanitizationMiddleware`.
 
 ## Roadmap
 
